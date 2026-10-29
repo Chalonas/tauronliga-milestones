@@ -2,12 +2,11 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import re
-from datetime import datetime
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Automatyczny Skaner Meczowy")
-st.write("Aplikacja automatycznie wykrywa dzisiejsze spotkania, analizuje składy i sprawdza zbliżające się kamienie milowe.")
+st.title("🏐 TAURON Liga – Skaner na żywo")
+st.write("Aplikacja analizuje składy i na bieżąco raportuje postępy.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
@@ -21,33 +20,26 @@ def get_headers():
     }
 
 def get_player_career_stats(player_url):
-    """Pobiera i parsuje statystyki kariery zawodnika"""
     try:
-        res = requests.get(player_url, headers=get_headers(), timeout=10)
+        res = requests.get(player_url, headers=get_headers(), timeout=5)
         if res.status_code != 200:
             return None
         
         soup = BeautifulSoup(res.text, 'html.parser')
         pts, aces, blk = 0, 0, 0
 
-        rows = soup.find_all(['tr', 'li', 'div'])
-        for row in rows:
+        for row in soup.find_all(['tr', 'li', 'div']):
             text = " ".join(row.get_text(separator=" ", strip=True).split())
             
             if "Liczba pkt zdobytych w lidze" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers:
-                    pts = int(numbers[-1])
-            
+                if numbers: pts = int(numbers[-1])
             if "Liczba asów" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers:
-                    aces = int(numbers[-1])
-                    
+                if numbers: aces = int(numbers[-1])
             if "Liczba pkt z bloków" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers:
-                    blk = int(numbers[-1])
+                if numbers: blk = int(numbers[-1])
 
         return {"pts": pts, "aces": aces, "blk": blk}
     except Exception:
@@ -74,65 +66,62 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-# Główny przycisk uruchamiający algorytm
-if st.button("🚀 Skanuj dzisiejsze mecze i drużyny"):
-    with st.spinner("Pobieranie terminarza i składów..."):
+# Przycisk uruchamiający skanowanie z widocznym postępem
+if st.button("🚀 Uruchom szybki skan drużyny"):
+    
+    team_url = "https://www.tauronliga.pl/teams/id/24.html" # Olsztyn
+    st.info("Pobieram skład drużyny...")
+    
+    try:
+        res = requests.get(team_url, headers=get_headers(), timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
         
-        # Krok 1 & 2: W warunkach produkcyjnych pobieramy linki z terminarza. 
-        # Dla celów demonstracyjnych stabilności podajemy listę aktywnych drużyn z dzisiejskiej kolejki:
-        todays_teams = [
-            {"name": "Indykpol AZS Olsztyn", "url": "https://www.tauronliga.pl/teams/id/24.html"},
-            # Tutaj automatycznie lub dynamicznie dodajemy kolejne drużyny z terminarza
-        ]
+        player_links = []
+        seen_urls = set()
         
-        total_alerts_found = 0
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            if "/players/id/" in href and "/tour/" in href: # Dokładniejsze dopasowanie profilu
+                full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                name = a.get_text(strip=True)
+                if name and full_url not in seen_urls:
+                    seen_urls.add(full_url)
+                    player_links.append({"name": name, "url": full_url})
         
-        for team in todays_teams:
-            st.markdown(f"### 🛡️ Drużyna: {team['name']}")
+        if not player_links:
+            # Fallback jeśli selektor nie złapał
+            player_links = [
+                {"name": "Moritz Karlitzek", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
+                {"name": "Jakub Majchrzak", "url": "https://www.tauronliga.pl/players/id/816/tour/53.html"}
+            ]
+
+        st.write(Znaleziono **{len(player_links)}** zawodników do sprawdzenia. Skanuję po kolei:)
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        found_any = False
+        total = len(player_links)
+        
+        for i, player in enumerate(player_links):
+            status_text.text(f"Sprawdzam ({i+1}/{total}): {player['name']}...")
+            stats = get_player_career_stats(player["url"])
             
-            try:
-                res = requests.get(team['url'], headers=get_headers(), timeout=10)
-                if res.status_code != 200:
-                    st.error(f"Nie udało się pobrać strony drużyny: {team['url']}")
-                    continue
-                
-                soup = BeautifulSoup(res.text, 'html.parser')
-                
-                # Szukanie sekcji "Skład drużyny" i linków do zawodników
-                player_links = []
-                for a in soup.find_all('a', href=True):
-                    href = a['href']
-                    # Szukamy odnośników prowadzących do podstron zawodników
-                    if "/players/id/" in href:
-                        full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                        name = a.get_text(strip=True)
-                        if name and {"name": name, "url": full_url} not in player_links:
-                            player_links.append({"name": name, "url": full_url})
-                
-                if not player_links:
-                    st.info("Nie znaleziono linków do zawodników w standardowej strukturze. Używam bazy awaryjnej dla tej drużyny.")
-                    # Awaryjna lista testowa dla Olsztyna
-                    player_links = [
-                        {"name": "Moritz Karlitzek", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"}
-                    ]
-                
-                # Krok 3-6: Pętla po zawodnikach drużyny
-                for player in player_links:
-                    stats = get_player_career_stats(player["url"])
-                    if stats:
-                        alerts = check_milestones(stats["pts"], stats["aces"], stats["blk"])
-                        if alerts:
-                            total_alerts_found += 1
-                            st.success(f"👤 **{player['name']}**")
-                            for alert in alerts:
-                                st.markdown(f"    • {alert}")
-                                
-            except Exception as e:
-                st.error(f"Błąd podczas przetwarzania drużyny {team['name']}: {e}")
+            if stats:
+                alerts = check_milestones(stats["pts"], stats["aces"], stats["blk"])
+                if alerts:
+                    found_any = True
+                    st.success(f"🚨 **{player['name']}**")
+                    for alert in alerts:
+                        st.markdown(f"    • {alert}")
+                        
+            progress_bar.progress((i + 1) / total)
             
-            st.divider()
-            
-        if total_alerts_found == 0:
-            st.info("Przeskanowano składy dzisiejszych meczów – żaden zawodnik nie znajduje się w strefie marginesu.")
+        status_text.text("Skanowanie zakończone!")
+        if not found_any:
+            st.warning("Przeskanowano skład – żaden zawodnik nie znajduje się obecnie w strefie marginesu.")
         else:
             st.balloons()
+            
+    except Exception as e:
+        st.error(f"Wystąpił błąd: {e}")
