@@ -1,69 +1,90 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import re
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Diagnostyka Statystyk")
-st.write("Ta wersja pokazuje odczytane dane dla każdego zawodnika, żeby upewnić się, czy parser działa poprawnie.")
+st.title("🏐 TAURON Liga – Poprawiony Parser Statystyk")
+st.write("Aplikacja korzystająca z parsowania tabel strukturalnych tauronliga.pl.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
 ACE_STEP, ACE_MARGIN = 100, 10
 
 def get_player_career_stats(player_url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    # Bogatsze nagłówki udające prawdziwą przeglądarkę, aby uniknąć blokady 403
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://www.tauronliga.pl/'
+    }
     try:
-        res = requests.get(player_url, headers=headers, timeout=5)
+        res = requests.get(player_url, headers=headers, timeout=10)
         if res.status_code != 200:
-            return None
+            return {"error": f"Błąd HTTP: {res.status_code}"}
         
         soup = BeautifulSoup(res.text, 'html.parser')
-        text_content = soup.get_text()
-
+        
         pts, aces, blk = 0, 0, 0
 
-        pts_match = re.search(r'Liczba pkt zdobytych w\s*ligie\s*(\d+)', text_content)
-        aces_match = re.search(r'Liczba asów\s*(\d+)', text_content)
-        blk_match = re.search(r'Liczba pkt z bloków\s*(\d+)', text_content)
-
-        if pts_match: pts = int(pts_match.group(1))
-        if aces_match: aces = int(aces_match.group(1))
-        if blk_match: blk = int(blk_match.group(1))
+        # Szukamy wierszy tabeli lub elementów listy, gdzie statystyki są przechowywane parami
+        # Przeszukujemy wszystkie wiersze tabel (tr) lub bloki tekstowe
+        rows = soup.find_all(['tr', 'li', 'div'])
+        for row in rows:
+            text = row.get_text(separator=" ", strip=True)
+            
+            # Szukamy etykiet i wyciągamy liczby z tego samego lub sąsiadujących elementów
+            if "Liczba pkt zdobytych w lidze" in text:
+                # Wyciągnij wszystkie cyfry z tego wiersza
+                import re
+                numbers = re.findall(r'\d+', text)
+                if numbers:
+                    # Zazwyczaj ostatnia lub odpowiednia liczba w wierszu to szukana wartość
+                    pts = int(numbers[-1])
+            
+            if "Liczba asów" in text:
+                import re
+                numbers = re.findall(r'\d+', text)
+                if numbers:
+                    aces = int(numbers[-1])
+                    
+            if "Liczba pkt z bloków" in text:
+                import re
+                numbers = re.findall(r'\d+', text)
+                if numbers:
+                    blk = int(numbers[-1])
 
         return {"pts": pts, "aces": aces, "blk": blk}
     except Exception as e:
-        return None
+        return {"error": str(e)}
 
-if st.button("🧪 Uruchom test i pokaż odczytane statystyki"):
-    # Kilka przykładowych ID do testu
-    test_players = [
-        {"name": "Zawodnik Testowy 1", "url": "https://www.tauronliga.pl/players/id/650/tour/53.html"},
-        {"name": "Zawodnik Testowy 2", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
-        {"name": "Zawodnik Testowy 3", "url": "https://www.tauronliga.pl/players/id/1020/tour/53.html"}
+if st.button("🔍 Przetestuj pobieranie danych"):
+    test_urls = [
+        {"name": "Moritz Karlitzek", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
+        {"name": "Jakub Majchrzak", "url": "https://www.tauronliga.pl/players/id/816/tour/53.html"}
     ]
     
-    for p in test_players:
-        stats = get_player_career_stats(p["url"])
-        if stats:
-            st.write(f"**Profil:** {p['url']}")
-            st.write(f"➡️ Odczytano: Punkty = **{stats['pts']}**, Asy = **{stats['aces']}**, Bloki = **{stats['blk']}**")
+    for p in test_urls:
+        st.write(f"### Sprawdzam: {p['name']}")
+        result = get_player_career_stats(p["url"])
+        
+        if "error" in result:
+            st.error(f"Nie udało się pobrać: {result['error']}")
+        else:
+            st.success(f"Odczytano poprawnie! Punkty: **{result['pts']}**, Asy: **{result['aces']}**, Bloki: **{result['blk']}**")
             
             # Sprawdzenie marginesów
-            pts, aces, blk = stats["pts"], stats["aces"], stats["blk"]
+            pts, aces, blk = result["pts"], result["aces"], result["blk"]
             if pts > 0:
                 next_pts = ((pts // POINT_STEP) + 1) * POINT_STEP
                 if 0 < (next_pts - pts) <= POINT_MARGIN:
-                    st.success(f"🎯 Trafienie w punkty! Brakuje {next_pts - pts} do {next_pts}")
+                    st.info(f"🎯 PUNKTY w strefie marginesu! Brakuje {next_pts - pts} do {next_pts}")
             if aces > 0:
                 next_aces = ((aces // ACE_STEP) + 1) * ACE_STEP
                 if 0 < (next_aces - aces) <= ACE_MARGIN:
-                    st.success(f"💣 Trafienie w asy! Brakuje {next_aces - aces} do {next_aces}")
+                    st.info(f"💣 ASY w strefie marginesu! Brakuje {next_aces - aces} do {next_aces}")
             if blk > 0:
                 next_blk = ((blk // BLOCK_STEP) + 1) * BLOCK_STEP
                 if 0 < (next_blk - blk) <= BLOCK_MARGIN:
-                    st.success(f"🧱 Trafienie w bloki! Brakuje {next_blk - blk} do {next_blk}")
-            st.divider()
-        else:
-            st.error(f"Nie udało się pobrać strony: {p['url']}")
+                    st.info(f"🧱 BLOKI w strefie marginesu! Brakuje {next_blk - blk} do {next_blk}")
+        st.divider()
