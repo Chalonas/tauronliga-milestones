@@ -6,12 +6,22 @@ from datetime import datetime
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Skaner Meczów wg Daty")
-st.write("Wybierz datę, aby automatycznie wykryć drużyny grające tego dnia i sprawdzić ich składy.")
+st.title("🏐 TAURON Liga – Skaner Kamieni Milowych")
+st.write("Wybierz datę meczów lub skorzystaj z wyboru drużyn z bazy.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
 ACE_STEP, ACE_MARGIN = 100, 10
+
+# Baza wszystkich popularnych drużyn jako bezpieczny zapas
+TEAMS_DB = {
+    "Indykpol AZS Olsztyn": "https://www.tauronliga.pl/teams/id/24.html",
+    "Asseco Resovia Rzeszów": "https://www.tauronliga.pl/teams/id/11.html",
+    "Grupa Azoty ZAKSA Kędzierzyn-Koźle": "https://www.tauronliga.pl/teams/id/12.html",
+    "Trefl Gdańsk": "https://www.tauronliga.pl/teams/id/14.html",
+    "Projekt Warszawa": "https://www.tauronliga.pl/teams/id/19.html",
+    "Jastrzębski Węgiel": "https://www.tauronliga.pl/teams/id/8.html"
+}
 
 def get_headers():
     return {
@@ -21,9 +31,7 @@ def get_headers():
     }
 
 def get_teams_for_date(target_date):
-    """Wchodzi na terminarz i wyciąga drużyny grające w wybranym dniu"""
     teams_dict = {}
-    # Format daty na stronie to zazwyczaj DD.MM.YYYY lub DD.MM
     date_str_dot = target_date.strftime("%d.%m.%Y")
     date_str_short = target_date.strftime("%d.%m")
     
@@ -35,19 +43,11 @@ def get_teams_for_date(target_date):
             return {}
             
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # Szukamy elementów blokowych reprezentujących mecze (np. wiersze, karty, divy)
-        match_blocks = soup.find_all(['tr', 'div', 'li'], class_=lambda x: x and ('game' in x or 'match' in x or 'row' in x))
-        
-        if not match_blocks:
-            # Jeśli brak specyficznych klas, bierzemy wszystkie wiersze/bloki
-            match_blocks = soup.find_all(['tr', 'div'])
+        match_blocks = soup.find_all(['tr', 'div', 'li'])
 
         for block in match_blocks:
             block_text = block.get_text()
-            # Sprawdzamy czy ten blok meczowy zawiera szukaną datę
             if date_str_dot in block_text or date_str_short in block_text:
-                # Wyciągamy drużyny tylko z tego bloku meczowego
                 for a in block.find_all('a', href=True):
                     href = a['href']
                     if "/teams/id/" in href:
@@ -55,9 +55,8 @@ def get_teams_for_date(target_date):
                         team_name = a.get_text(strip=True)
                         if team_name and len(team_name) > 2:
                             teams_dict[team_name] = full_url
-                            
-    except Exception as e:
-        st.error(f"Błąd podczas pobierania terminarza: {e}")
+    except Exception:
+        pass
         
     return teams_dict
 
@@ -108,65 +107,82 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-# Wybór daty w panelu bocznym lub głównym
-selected_date = st.date_input("Wybierz datę meczów do analizy:", datetime.now())
+# Układ zakładek lub sekcji w Streamlicie
+tab1, tab2 = st.tabs(["📅 Skaner wg Daty", "🛡️ Ręczny wybór drużyn"])
 
-if st.button("🔍 Skanuj mecze z wybranej daty"):
-    with st.spinner(f"Szukam meczów z dnia {selected_date.strftime('%d.%m.%Y')}..."):
-        teams_found = get_teams_for_date(selected_date)
-        
-    if not teams_found:
-        st.warning(f"Brak meczów w oficjalnym terminarzu na dzień {selected_date.strftime('%d.%m.%Y')}. Wybierz datę, w której odbywają się spotkania.")
-    else:
-        st.success(f"Wykryto drużyny grające w tym dniu: {', '.join(teams_found.keys())}")
-        
-        total_alerts_found = 0
-        overall_progress = st.progress(0)
-        status_box = st.empty()
-        
-        teams_list = list(teams_found.items())
-        teams_count = len(teams_list)
-        
-        for t_idx, (team_name, team_url) in enumerate(teams_list):
-            status_box.text(f"Analizuję skład ({t_idx+1}/{teams_count}): {team_name}...")
+with tab1:
+    selected_date = st.date_input("Wybierz datę meczów:", datetime.now())
+    scan_date_btn = st.button("Skanuj mecze z wybranej daty")
+
+    if scan_date_btn:
+        with st.spinner(f"Szukam meczów z dnia {selected_date.strftime('%d.%m.%Y')}..."):
+            teams_found = get_teams_for_date(selected_date)
             
-            try:
-                res = requests.get(team_url, headers=get_headers(), timeout=5)
-                if res.status_code != 200:
-                    continue
-                
-                soup = BeautifulSoup(res.text, 'html.parser')
-                player_links = []
-                seen_urls = set()
-                
-                for a in soup.find_all('a', href=True):
-                    href = a['href']
-                    if "/players/id/" in href and "/tour/" in href:
-                        full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                        name = a.get_text(strip=True)
-                        if name and full_url not in seen_urls:
-                            seen_urls.add(full_url)
-                            player_links.append({"name": name, "url": full_url})
-                
-                if player_links:
-                    st.subheader(f"🛡️ {team_name}")
-                    for player in player_links:
-                        stats = get_player_career_stats(player["url"])
-                        if stats:
-                            alerts = check_milestones(stats["pts"], stats["aces"], stats["blk"])
-                            if alerts:
-                                total_alerts_found += 1
-                                st.success(f"👤 **{player['name']}**")
-                                for alert in alerts:
-                                    st.markdown(f"    • {alert}")
-            
-            except Exception as e:
-                st.error(f"Błąd przy drużynie {team_name}: {e}")
-                
-            overall_progress.progress((t_idx + 1) / teams_count)
-            
-        status_box.text("Skanowanie zakończone!")
-        if total_alerts_found == 0:
-            st.info("Przeskanowano składy drużyn z tego dnia – żaden zawodnik nie znajduje się w strefie marginesu.")
+        if not teams_found:
+            st.warning(f"Brak meczów w oficjalnym terminarzu na dzień {selected_date.strftime('%d.%m.%Y')}. Skorzystaj z zakładki 'Ręczny wybór drużyn', aby przetestować aplikację.")
         else:
-            st.balloons()
+            run_scan(teams_found)
+
+with tab2:
+    st.write("Wybierz zespoły z poniższej listy, aby sprawdzić ich składy niezależnie od terminarza:")
+    selected_manual_teams = st.multiselect("Wybierz drużyny:", options=list(TEAMS_DB.keys()), default=["Indykpol AZS Olsztyn"])
+    scan_manual_btn = st.button("Skanuj zaznaczone drużyny")
+
+    if scan_manual_btn:
+        teams_found = {name: TEAMS_DB[name] for name in selected_manual_teams}
+        run_scan(teams_found)
+
+# Wspólna funkcja wykonująca skanowanie listy drużyn
+def run_scan(teams_dict):
+    st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
+    
+    total_alerts_found = 0
+    overall_progress = st.progress(0)
+    status_box = st.empty()
+    
+    teams_list = list(teams_dict.items())
+    teams_count = len(teams_list)
+    
+    for t_idx, (team_name, team_url) in enumerate(teams_list):
+        status_box.text(f"Analizuję skład ({t_idx+1}/{teams_count}): {team_name}...")
+        
+        try:
+            res = requests.get(team_url, headers=get_headers(), timeout=5)
+            if res.status_code != 200:
+                continue
+            
+            soup = BeautifulSoup(res.text, 'html.parser')
+            player_links = []
+            seen_urls = set()
+            
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if "/players/id/" in href and "/tour/" in href:
+                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                    name = a.get_text(strip=True)
+                    if name and full_url not in seen_urls:
+                        seen_urls.add(full_url)
+                        player_links.append({"name": name, "url": full_url})
+            
+            if player_links:
+                st.subheader(f"🛡️ {team_name}")
+                for player in player_links:
+                    stats = get_player_career_stats(player["url"])
+                    if stats:
+                        alerts = check_milestones(stats["pts"], stats["aces"], stats["blk"])
+                        if alerts:
+                            total_alerts_found += 1
+                            st.success(f"👤 **{player['name']}**")
+                            for alert in alerts:
+                                st.markdown(f"    • {alert}")
+        
+        except Exception as e:
+            st.error(f"Błąd przy drużynie {team_name}: {e}")
+            
+        overall_progress.progress((t_idx + 1) / teams_count)
+        
+    status_box.text("Skanowanie zakończone!")
+    if total_alerts_found == 0:
+        st.info("Przeskanowano wybrane drużyny – żaden zawodnik nie znajduje się obecnie w strefie marginesu.")
+    else:
+        st.balloons()
