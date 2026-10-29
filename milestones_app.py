@@ -51,4 +51,88 @@ def get_teams_for_date(target_date):
                     href = a['href']
                     if "/teams/id/" in href:
                         full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                        team_name = a.
+                        team_name = a.get_text(strip=True)
+                        if team_name and len(team_name) > 2:
+                            teams_dict[team_name] = full_url
+                            
+        if not teams_dict:
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if "/teams/id/" in href:
+                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                    team_name = a.get_text(strip=True)
+                    if team_name and len(team_name) > 2:
+                        teams_dict[team_name] = full_url
+                        
+    except Exception as e:
+        st.error(f"Błąd podczas pobierania terminarza: {e}")
+        
+    return teams_dict
+
+def get_player_career_stats(player_url):
+    try:
+        res = requests.get(player_url, headers=get_headers(), timeout=5)
+        if res.status_code != 200:
+            return None
+        
+        soup = BeautifulSoup(res.text, 'html.parser')
+        pts, aces, blk = 0, 0, 0
+
+        for row in soup.find_all(['tr', 'li', 'div']):
+            text = " ".join(row.get_text(separator=" ", strip=True).split())
+            
+            if "Liczba pkt zdobytych w lidze" in text:
+                nums = re.findall(r'\d+', text)
+                if nums: 
+                    pts = int(nums[-1])
+            if "Liczba asów" in text:
+                nums = re.findall(r'\d+', text)
+                if nums: 
+                    aces = int(nums[-1])
+            if "Liczba pkt z bloków" in text:
+                nums = re.findall(r'\d+', text)
+                if nums: 
+                    blk = int(nums[-1])
+
+        return {"pts": pts, "aces": aces, "blk": blk}
+    except Exception:
+        return None
+
+def check_milestones(pts, aces, blk):
+    alerts = []
+    
+    if pts > 0:
+        nxt = ((pts // POINT_STEP) + 1) * POINT_STEP
+        need = nxt - pts
+        if 0 < need <= POINT_MARGIN:
+            alerts.append(f"🎯 PUNKTY: {pts} pkt -> Brakuje {need} do progu {nxt}")
+            
+    if aces > 0:
+        nxt = ((aces // ACE_STEP) + 1) * ACE_STEP
+        need = nxt - aces
+        if 0 < need <= ACE_MARGIN:
+            alerts.append(f"💣 ASY: {aces} asów -> Brakuje {need} do progu {nxt}")
+            
+    if blk > 0:
+        nxt = ((blk // BLOCK_STEP) + 1) * BLOCK_STEP
+        need = nxt - blk
+        if 0 < need <= BLOCK_MARGIN:
+            alerts.append(f"🧱 BLOKI: {blk} bloków -> Brakuje {need} do progu {nxt}")
+            
+    return alerts
+
+def run_scan(teams_dict):
+    st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
+    
+    total_alerts_found = 0
+    overall_progress = st.progress(0)
+    status_box = st.empty()
+    
+    teams_list = list(teams_dict.items())
+    teams_count = len(teams_list)
+    
+    for t_idx, (team_name, team_url) in enumerate(teams_list):
+        status_box.text(f"Analizuję skład ({t_idx+1}/{teams_count}): {team_name}...")
+        
+        try:
+            res = requests.get(team_url,
