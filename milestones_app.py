@@ -6,21 +6,42 @@ from datetime import datetime
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Skaner Meczów wg Daty")
-st.write("Wybierz datę. Aplikacja spróbuje automatycznie dopasować drużyny, a w razie potrzeby możesz je łatwo zmienić poniżej.")
+st.title("🏐 TAURON Liga – Skaner Meczów i Milestones")
+st.write("Wybierz drużyny grające w interesującym Cię dniu i uruchom szybkie skanowanie składów.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
 ACE_STEP, ACE_MARGIN = 100, 10
 
-# Pełna baza drużyn jako bezpieczny punkt wyjścia / awarię
-ALL_TEAMS = {
-    "Indykpol AZS Olsztyn": "https://www.tauronliga.pl/teams/id/24.html",
-    "Asseco Resovia Rzeszów": "https://www.tauronliga.pl/teams/id/11.html",
-    "Grupa Azoty ZAKSA Kędzierzyn-Koźle": "https://www.tauronliga.pl/teams/id/12.html",
-    "Trefl Gdańsk": "https://www.tauronliga.pl/teams/id/14.html",
-    "Projekt Warszawa": "https://www.tauronliga.pl/teams/id/19.html",
-    "Jastrzębski Węgiel": "https://www.tauronliga.pl/teams/id/8.html"
+# Pełna i stabilna baza drużyn TAURON Ligi
+TEAMS_DB = {
+    "Grupa Azoty Chemik Police": "https://www.tauronliga.pl/teams/id/1.html",
+    "BKS Bostik ZGO Bielsko-Biała": "https://www.tauronliga.pl/teams/id/2.html",
+    "Developres Rzeszów": "https://www.tauronliga.pl/teams/id/3.html",
+    "ŁKS Commercecon Łódź": "https://www.tauronliga.pl/teams/id/4.html",
+    "Grot Budowlani Łódź": "https://www.tauronliga.pl/teams/id/5.html",
+    "MOYA Radomka Radom": "https://www.tauronliga.pl/teams/id/6.html",
+    "Energa MKS Kalisz": "https://www.tauronliga.pl/teams/id/7.html",
+    "ITA TOOLS Sties Mielec": "https://www.tauronliga.pl/teams/id/9.html",
+    "UNI Opole": "https://www.tauronliga.pl/teams/id/10.html",
+    "Metalkas Pałac Bydgoszcz": "https://www.tauronliga.pl/teams/id/12.html",
+    "Sokół & Hagric Mogilno": "https://www.tauronliga.pl/teams/id/15.html",
+    " #${team_name} ": "https://www.tauronliga.pl/teams/id/14.html" # placeholder w razie czego, ale użyjemy bezpiecznego słownika
+}
+
+# Poprawiony, czysty słownik z poprawnymi nazwami drużyn TAURON Ligi
+TEAMS_DB = {
+    "Developres Rzeszów": "https://www.tauronliga.pl/teams/id/3.html",
+    "ŁKS Commercecon Łódź": "https://www.tauronliga.pl/teams/id/4.html",
+    "Grot Budowlani Łódź": "https://www.tauronliga.pl/teams/id/5.html",
+    "BKS Bostik ZGO Bielsko-Biała": "https://www.tauronliga.pl/teams/id/2.html",
+    "Grupa Azoty Chemik Police": "https://www.tauronliga.pl/teams/id/1.html",
+    "MOYA Radomka Radom": "https://www.tauronliga.pl/teams/id/6.html",
+    "UNI Opole": "https://www.tauronliga.pl/teams/id/10.html",
+    "ITA TOOLS Stal Mielec": "https://www.tauronliga.pl/teams/id/9.html",
+    "Metalkas Pałac Bydgoszcz": "https://www.tauronliga.pl/teams/id/12.html",
+    "Sokół & Hagric Mogilno": "https://www.tauronliga.pl/teams/id/15.html",
+    "Energa MKS Kalisz": "https://www.tauronliga.pl/teams/id/7.html"
 }
 
 def get_headers():
@@ -30,41 +51,9 @@ def get_headers():
         'Referer': 'https://www.tauronliga.pl/'
     }
 
-def get_teams_for_date(target_date):
-    """Wchodzi na stronę terminarza i próbuje wyciągnąć drużyny z wybranej daty"""
-    teams_dict = {}
-    date_str_dot = target_date.strftime("%d.%m.%Y")
-    date_str_short = target_date.strftime("%d.%m")
-    
-    schedule_url = "https://www.tauronliga.pl/games/tour/53.html"
-    
-    try:
-        res = requests.get(schedule_url, headers=get_headers(), timeout=10)
-        if res.status_code != 200:
-            return {}
-            
-        soup = BeautifulSoup(res.text, 'html.parser')
-        elements = soup.find_all(['tr', 'div', 'section', 'article'])
-        
-        for el in elements:
-            text = el.get_text()
-            if date_str_dot in text or date_str_short in text:
-                for a in el.find_all('a', href=True):
-                    href = a['href']
-                    if "/teams/id/" in href:
-                        full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                        team_name = a.get_text(strip=True)
-                        if team_name and len(team_name) > 2:
-                            teams_dict[team_name] = full_url
-                            
-    except Exception as e:
-        st.error(f"Nie udało się pobrać terminarza: {e}")
-        
-    return teams_dict
-
 def get_player_career_stats(player_url):
     try:
-        res = requests.get(player_url, headers=get_headers(), timeout=5)
+        res = requests.get(player_url, headers=get_headers(), timeout=4)
         if res.status_code != 200:
             return None
         
@@ -109,29 +98,22 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-# 1. Wybór daty przez użytkownika
-selected_date = st.date_input("Wybierz datę meczów do analizy:", datetime.now())
+# Wybór daty (informacyjnie dla użytkownika)
+selected_date = st.date_input("Wybierz datę meczów:", datetime.now())
 
-# 2. Automatyczne wykrywanie drużyn dla danej daty
-detected_teams = get_teams_for_date(selected_date)
-
-# Jeśli automatyczne wykrycie nic nie zwróci dla tej daty, podpowiadamy domyślne z bazy
-default_selection = list(detected_teams.keys()) if detected_teams else list(ALL_TEAMS.keys())[:2]
-
-# 3. Pole wyboru (multiselect) – daje 100% kontroli i eliminuje problemy z niedopasowaniem daty
+# Wybór drużyn z pełnej listy
 selected_team_names = st.multiselect(
-    "Wykryte drużyny (możesz je dowolnie zmienić lub dodać inne z listy):",
-    options=list(ALL_TEAMS.keys()),
-    default=default_selection
+    "Wybierz drużyny grające tego dnia:",
+    options=list(TEAMS_DB.keys()),
+    default=list(TEAMS_DB.keys())[:2]
 )
 
-# 4. Przycisk startowy skanowania
-if st.button("🔍 Skanuj wybrane drużyny"):
-    teams_found = {name: ALL_TEAMS[name] for name in selected_team_names if name in ALL_TEAMS}
-    
-    if not teams_found:
-        st.warning("Nie wybrano żadnych drużyn do skanowania.")
+# Przycisk startowy
+if st.button("🔍 Skanuj zaznaczone drużyny"):
+    if not selected_team_names:
+        st.warning("Wybierz przynajmniej jedną drużyny z listy.")
     else:
+        teams_found = {name: TEAMS_DB[name] for name in selected_team_names}
         st.success(f"Analizuję drużyny: {', '.join(teams_found.keys())}")
         
         total_alerts_found = 0
