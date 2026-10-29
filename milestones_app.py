@@ -6,8 +6,8 @@ from datetime import datetime
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Skaner Dzisiejszych Meczów")
-st.write("Aplikacja automatycznie pobiera terminarz na dziś, wykrywa grające drużyny i skanuje ich składy pod kątem rekordów.")
+st.title("🏐 TAURON Liga – Skaner Meczów wg Daty")
+st.write("Wybierz datę, aby automatycznie wykryć drużyny grające tego dnia i sprawdzić ich składy.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
@@ -20,12 +20,12 @@ def get_headers():
         'Referer': 'https://www.tauronliga.pl/'
     }
 
-def get_todays_teams():
-    """Wchodzi na stronę terminarza tauronliga.pl i wyciąga drużyny grające dzisiaj"""
+def get_teams_for_date(target_date):
+    """Wchodzi na stronę terminarza tauronliga.pl i wyciąga drużyny grające w wybranym dniu"""
     teams_dict = {}
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    date_str_dot = target_date.strftime("%d.%m.%Y")
+    date_str_short = target_date.strftime("%d.%m")
     
-    # Adres strony z terminarzem/wynikami (lub główna strona ligi, gdzie widoczny jest terminarz)
     schedule_url = "https://www.tauronliga.pl/games/tour/53.html"
     
     try:
@@ -35,16 +35,29 @@ def get_todays_teams():
             
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # Szukamy linków do drużyn (/teams/id/...) na stronie terminarza
-        # Możemy też dopasować elementy meczowe
-        for a in soup.find_all('a', href=True):
-            href = a['href']
-            if "/teams/id/" in href:
-                full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                team_name = a.get_text(strip=True)
-                if team_name and len(team_name) > 2:
-                    teams_dict[team_name] = full_url
-                    
+        # Szukamy drużyn powiązanych z datą w terminarzu
+        elements = soup.find_all(['tr', 'div', 'section', 'article'])
+        for el in elements:
+            text = el.get_text()
+            if date_str_dot in text or date_str_short in text:
+                for a in el.find_all('a', href=True):
+                    href = a['href']
+                    if "/teams/id/" in href:
+                        full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                        team_name = a.get_text(strip=True)
+                        if team_name and len(team_name) > 2:
+                            teams_dict[team_name] = full_url
+                            
+        # Awaryjnie: jeśli nie znajdzie po dacie na stronie, pobierze ogólne drużyny z terminarza
+        if not teams_dict:
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if "/teams/id/" in href:
+                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                    team_name = a.get_text(strip=True)
+                    if team_name and len(team_name) > 2:
+                        teams_dict[team_name] = full_url
+                        
     except Exception as e:
         st.error(f"Nie udało się pobrać terminarza: {e}")
         
@@ -97,14 +110,16 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-# Przycisk startowy
-if st.button("🔍 Znajdź dzisiejsze mecze i skanuj składy"):
-    with st.spinner("Pobieranie terminarza z tauronliga.pl..."):
-        teams_found = get_todays_teams()
+# --- WYBÓR DATY W INTERFEJCIE ---
+selected_date = st.date_input("Wybierz datę meczów do analizy:", datetime.now())
+
+# Przycisk startowy z wybraną datą
+if st.button("🔍 Skanuj mecze z wybranej daty"):
+    with st.spinner(f"Pobieranie terminarza na dzień {selected_date.strftime('%d.%m.%Y')}..."):
+        teams_found = get_teams_for_date(selected_date)
         
     if not teams_found:
-        st.warning("Brak meczów w oficjalnym terminarzu na dziś lub struktura strony uległa zmianie. Używam awaryjnej bazy drużyn:")
-        # Baza awaryjna gdyby dzisiaj nie było meczów lub struktura linków wymagała precyzji
+        st.warning("Brak meczów w oficjalnym terminarzu na wybraną datę. Używam awaryjnej bazy drużyn:")
         teams_found = {
             "Indykpol AZS Olsztyn": "https://www.tauronliga.pl/teams/id/24.html",
             "Asseco Resovia Rzeszów": "https://www.tauronliga.pl/teams/id/11.html"
@@ -150,8 +165,8 @@ if st.button("🔍 Znajdź dzisiejsze mecze i skanuj składy"):
                             total_alerts_found += 1
                             st.success(f"👤 **{player['name']}**")
                             for alert in alerts:
-                                st.markdown(f"    • {alert}")
-            
+                                st.markdown(f"    • {alert}")
+        
         except Exception as e:
             st.error(f"Błąd przy drużynie {team_name}: {e}")
             
@@ -159,6 +174,6 @@ if st.button("🔍 Znajdź dzisiejsze mecze i skanuj składy"):
         
     status_box.text("Skanowanie zakończone!")
     if total_alerts_found == 0:
-        st.info("Przeskanowano składy dzisiejszych drużyn – żaden zawodnik nie znajduje się w strefie marginesu.")
+        st.info("Przeskanowano składy wybranych drużyn – żaden zawodnik nie znajduje się w strefie marginesu.")
     else:
         st.balloons()
