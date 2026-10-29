@@ -59,23 +59,3 @@ def get_teams_for_date(target_date):
             for a in soup.find_all('a', href=True):
                 href = a['href']
                 if "/teams/id/" in href:
-                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
-                    team_name = a.get_text(strip=True)
-                    if team_name and len(team_name) > 2:
-                        teams_dict[team_name] = full_url
-                        
-    except Exception as e:
-        st.error(f"Błąd podczas pobierania terminarza: {e}")
-        
-    return teams_dict
-
-def get_player_career_stats(player_url):
-    try:
-        res = requests.get(player_url, headers=get_headers(), timeout=5)
-        if res.status_code != 200:
-            return None
-        
-        soup = BeautifulSoup(res.text, 'html.parser')
-        pts, aces, blk = 0, 0, 0
-
-        for row in soup.find
