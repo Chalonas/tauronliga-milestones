@@ -107,19 +107,4 @@ def run_scan(teams_dict):
     status_box = st.empty()
     
     teams_list = list(teams_dict.items())
-    teams_count = len(teams_list)
-    
-    for t_idx, (team_name, team_url) in enumerate(teams_list):
-        status_box.text(f"Analizuję skład drużyny ({t_idx+1}/{teams_count}): {team_name}...")
-        
-        try:
-            res = requests.get(team_url, headers=get_headers(), timeout=5)
-            if res.status_code != 200:
-                continue
-            
-            soup = BeautifulSoup(res.text, 'html.parser')
-            player_links = []
-            seen_urls = set()
-            
-            for a in soup.find_all('a', href=True):
-                href
+    teams_count =
