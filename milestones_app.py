@@ -5,8 +5,8 @@ import re
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Skaner Kamieni Milowych")
-st.write("Wersja z dopracowanym parserem punktów, asów i bloków.")
+st.title("🏐 TAURON Liga – Precyzyjny Skaner Statystyk")
+st.write("Wersja oparta na analizie struktury tabelarycznej stron zawodników.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
@@ -27,34 +27,30 @@ def get_player_career_stats(player_url):
         
         pts, aces, blk = 0, 0, 0
 
-        # Przeszukujemy wszystkie wiersze tabeli lub elementy blokowe
-        for element in soup.find_all(['tr', 'li', 'div', 'p']):
-            text = element.get_text(separator=" ", strip=True)
-            
-            # Elastyczne szukanie punktów (np. "pkt", "punktów", "zdobytych w lidze")
-            if "pkt" in text.lower() and ("lidze" in text.lower() or "zdobytych" in text.lower() or "ogółem" in text.lower()):
-                numbers = re.findall(r'\d+', text)
-                if numbers:
-                    # Bierzemy największą rozsądną liczbę jako sumę punktów kariery
-                    valid_nums = [int(n) for n in numbers if int(n) > 10]
-                    if valid_nums:
-                        pts = max(valid_nums)
-            
-            if "asów" in text.lower() or "as serwisowy" in text.lower():
-                numbers = re.findall(r'\d+', text)
-                if numbers:
-                    aces = int(numbers[-1])
+        # Przeszukujemy wiersze tabel profilu zawodnika
+        for tr in soup.find_all('tr'):
+            tds = tr.find_all(['td', 'th'])
+            if len(tds) >= 2:
+                label = tds[0].get_text(strip=True).lower()
+                value_text = tds[1].get_text(strip=True)
+                
+                # Wyciągamy pierwszą napotkaną liczbę z kolumny wartości
+                match = re.search(r'\d+', value_text)
+                if match:
+                    val = int(match.group())
                     
-            if "blok" in text.lower():
-                numbers = re.findall(r'\d+', text)
-                if numbers:
-                    blk = int(numbers[-1])
+                    if "liczba pkt zdobytych w lidze" in label or ("liczba" in label and "pkt" in label and "lidze" in label):
+                        pts = val
+                    elif "liczba asów" in label:
+                        aces = val
+                    elif "liczba pkt z bloków" in label or "blok" in label:
+                        blk = val
 
         return {"pts": pts, "aces": aces, "blk": blk}
     except Exception as e:
         return {"error": str(e)}
 
-if st.button("🚀 Uruchom pełny skan zawodników"):
+if st.button("🚀 Uruchom precyzyjny skan zawodników"):
     test_urls = [
         {"name": "Moritz Karlitzek", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
         {"name": "Jakub Majchrzak", "url": "https://www.tauronliga.pl/players/id/816/tour/53.html"}
