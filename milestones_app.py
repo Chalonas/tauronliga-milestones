@@ -104,4 +104,9 @@ def check_milestones(pts, aces, blk):
         next_pts = ((pts // POINT_STEP) + 1) * POINT_STEP
         needed = next_pts - pts
         if 0 < needed <= POINT_MARGIN:
-            alerts.append(f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next
+            alerts.append(
+                f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next_pts}"
+            )
+            
+    if aces > 0:
+        next_aces = ((aces // ACE
