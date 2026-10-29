@@ -30,7 +30,6 @@ def get_headers():
     }
 
 def get_teams_for_date(target_date):
-    """Inteligentniejsze wyszukiwanie drużyn dla wybranej daty w terminarzu"""
     teams_dict = {}
     date_str_dot = target_date.strftime("%d.%m.%Y")
     date_str_short = target_date.strftime("%d.%m")
@@ -43,16 +42,11 @@ def get_teams_for_date(target_date):
             return {}
             
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # Szukamy wszystkich głównych kontenerów meczowych / kolejek / tabel
-        # Przeszukujemy całe drzewo w poszukiwaniu elementów zawierających datę
         elements = soup.find_all(['tr', 'div', 'section', 'article'])
         
-        target_container = None
         for el in elements:
             text = el.get_text()
             if date_str_dot in text or date_str_short in text:
-                # Znaleźliśmy kontener z tą datą, teraz wyciągamy z niego wszystkie drużyny
                 for a in el.find_all('a', href=True):
                     href = a['href']
                     if "/teams/id/" in href:
@@ -61,7 +55,6 @@ def get_teams_for_date(target_date):
                         if team_name and len(team_name) > 2:
                             teams_dict[team_name] = full_url
                             
-        # Jeśli nie znaleziono przez kontenery, spróbujmy podejścia globalnego dla danej podstrony rundy
         if not teams_dict:
             for a in soup.find_all('a', href=True):
                 href = a['href']
@@ -123,30 +116,7 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-tab1, tab2 = st.tabs(["📅 Skaner wg Daty", "🛡️ Ręczny wybór drużyn"])
-
-with tab1:
-    selected_date = st.date_input("Wybierz datę meczów:", datetime.now())
-    scan_date_btn = st.button("Skanuj mecze z wybranej daty")
-
-    if scan_date_btn:
-        with st.spinner(f"Szukam meczów z dnia {selected_date.strftime('%d.%m.%Y')}..."):
-            teams_found = get_teams_for_date(selected_date)
-            
-        if not teams_found:
-            st.warning(f"Brak meczów w oficjalnym terminarzu na dzień {selected_date.strftime('%d.%m.%Y')}.")
-        else:
-            run_scan(teams_found)
-
-with tab2:
-    st.write("Wybierz zespoły z poniższej listy, aby sprawdzić ich składy:")
-    selected_manual_teams = st.multiselect("Wybierz drużyny:", options=list(TEAMS_DB.keys()), default=list(TEAMS_DB.keys())[:4])
-    scan_manual_btn = st.button("Skanuj zaznaczone drużyny")
-
-    if scan_manual_btn:
-        teams_found = {name: TEAMS_DB[name] for name in selected_manual_teams}
-        run_scan(teams_found)
-
+# 1. DEFINICJA FUNKCJI SKANUJĄCEJ JEST TERAZ TUTAJ (PRZED UI)
 def run_scan(teams_dict):
     st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
     
@@ -184,19 +154,4 @@ def run_scan(teams_dict):
                     stats = get_player_career_stats(player["url"])
                     if stats:
                         alerts = check_milestones(stats["pts"], stats["aces"], stats["blk"])
-                        if alerts:
-                            total_alerts_found += 1
-                            st.success(f"👤 **{player['name']}**")
-                            for alert in alerts:
-                                st.markdown(f"    • {alert}")
-        
-        except Exception as e:
-            st.error(f"Błąd przy drużynie {team_name}: {e}")
-            
-        overall_progress.progress((t_idx + 1) / teams_count)
-        
-    status_box.text("Skanowanie zakończone!")
-    if total_alerts_found == 0:
-        st.info("Przeskanowano wybrane drużyny – żaden zawodnik nie znajduje się obecnie w strefie marginesu.")
-    else:
-        st.balloons()
+                        if alerts
