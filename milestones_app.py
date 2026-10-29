@@ -89,24 +89,4 @@ def get_player_career_stats(player_url):
                 numbers = re.findall(r'\d+', text)
                 if numbers: 
                     aces = int(numbers[-1])
-            if "Liczba pkt z bloków" in text:
-                numbers = re.findall(r'\d+', text)
-                if numbers: 
-                    blk = int(numbers[-1])
-
-        return {"pts": pts, "aces": aces, "blk": blk}
-    except Exception:
-        return None
-
-def check_milestones(pts, aces, blk):
-    alerts = []
-    if pts > 0:
-        next_pts = ((pts // POINT_STEP) + 1) * POINT_STEP
-        needed = next_pts - pts
-        if 0 < needed <= POINT_MARGIN:
-            alerts.append(
-                f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next_pts}"
-            )
-            
-    if aces > 0:
-        next_aces = ((aces // ACE
+            if "L
