@@ -13,7 +13,6 @@ POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
 ACE_STEP, ACE_MARGIN = 100, 10
 
-# Baza klubów do wyboru ręcznego
 TEAMS_DB = {
     "Developres Rzeszów": "https://www.tauronliga.pl/teams/id/11.html",
     "BKS Bostik ZGO Bielsko-Biała": "https://www.tauronliga.pl/teams/id/12.html",
@@ -66,13 +65,16 @@ def get_player_career_stats(player_url):
             
             if "Liczba pkt zdobytych w lidze" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers: pts = int(numbers[-1])
+                if numbers: 
+                    pts = int(numbers[-1])
             if "Liczba asów" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers: aces = int(numbers[-1])
+                if numbers: 
+                    aces = int(numbers[-1])
             if "Liczba pkt z bloków" in text:
                 numbers = re.findall(r'\d+', text)
-                if numbers: blk = int(numbers[-1])
+                if numbers: 
+                    blk = int(numbers[-1])
 
         return {"pts": pts, "aces": aces, "blk": blk}
     except Exception:
@@ -107,4 +109,25 @@ def run_scan(teams_dict):
     status_box = st.empty()
     
     teams_list = list(teams_dict.items())
-    teams_count =
+    teams_count = len(teams_list)
+    
+    for t_idx, (team_name, team_url) in enumerate(teams_list):
+        status_box.text(f"Analizuję skład drużyny ({t_idx+1}/{teams_count}): {team_name}...")
+        
+        try:
+            res = requests.get(team_url, headers=get_headers(), timeout=5)
+            if res.status_code != 200:
+                continue
+            
+            soup = BeautifulSoup(res.text, 'html.parser')
+            player_links = []
+            seen_urls = set()
+            
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if "/players/id/" in href and "/tour/" in href:
+                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                    name = a.get_text(strip=True)
+                    if name and full_url not in seen_urls:
+                        seen_urls.add(full_url)
+                        player_links.append({"
