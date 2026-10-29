@@ -6,14 +6,13 @@ from datetime import datetime
 
 st.set_page_config(page_title="TAURON Liga - Milestone Checker", page_icon="🏐", layout="wide")
 
-st.title("🏐 TAURON Liga – Skaner Kamieni Milowych")
-st.write("Wybierz datę meczów lub skorzystaj z wyboru drużyn z bazy.")
+st.title("🏐 TAURON Liga – Skaner Meczów wg Daty")
+st.write("Wybierz datę, aby automatycznie wykryć drużyny grające tego dnia i sprawdzić ich składy.")
 
 POINT_STEP, POINT_MARGIN = 500, 35
 BLOCK_STEP, BLOCK_MARGIN = 100, 10
 ACE_STEP, ACE_MARGIN = 100, 10
 
-# Baza wszystkich popularnych drużyn jako bezpieczny zapas
 TEAMS_DB = {
     "Indykpol AZS Olsztyn": "https://www.tauronliga.pl/teams/id/24.html",
     "Asseco Resovia Rzeszów": "https://www.tauronliga.pl/teams/id/11.html",
@@ -31,6 +30,7 @@ def get_headers():
     }
 
 def get_teams_for_date(target_date):
+    """Inteligentniejsze wyszukiwanie drużyn dla wybranej daty w terminarzu"""
     teams_dict = {}
     date_str_dot = target_date.strftime("%d.%m.%Y")
     date_str_short = target_date.strftime("%d.%m")
@@ -43,20 +43,36 @@ def get_teams_for_date(target_date):
             return {}
             
         soup = BeautifulSoup(res.text, 'html.parser')
-        match_blocks = soup.find_all(['tr', 'div', 'li'])
-
-        for block in match_blocks:
-            block_text = block.get_text()
-            if date_str_dot in block_text or date_str_short in block_text:
-                for a in block.find_all('a', href=True):
+        
+        # Szukamy wszystkich głównych kontenerów meczowych / kolejek / tabel
+        # Przeszukujemy całe drzewo w poszukiwaniu elementów zawierających datę
+        elements = soup.find_all(['tr', 'div', 'section', 'article'])
+        
+        target_container = None
+        for el in elements:
+            text = el.get_text()
+            if date_str_dot in text or date_str_short in text:
+                # Znaleźliśmy kontener z tą datą, teraz wyciągamy z niego wszystkie drużyny
+                for a in el.find_all('a', href=True):
                     href = a['href']
                     if "/teams/id/" in href:
                         full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
                         team_name = a.get_text(strip=True)
                         if team_name and len(team_name) > 2:
                             teams_dict[team_name] = full_url
-    except Exception:
-        pass
+                            
+        # Jeśli nie znaleziono przez kontenery, spróbujmy podejścia globalnego dla danej podstrony rundy
+        if not teams_dict:
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if "/teams/id/" in href:
+                    full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
+                    team_name = a.get_text(strip=True)
+                    if team_name and len(team_name) > 2:
+                        teams_dict[team_name] = full_url
+                        
+    except Exception as e:
+        st.error(f"Błąd podczas pobierania terminarza: {e}")
         
     return teams_dict
 
@@ -107,7 +123,6 @@ def check_milestones(pts, aces, blk):
             alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
     return alerts
 
-# Układ zakładek lub sekcji w Streamlicie
 tab1, tab2 = st.tabs(["📅 Skaner wg Daty", "🛡️ Ręczny wybór drużyn"])
 
 with tab1:
@@ -119,20 +134,19 @@ with tab1:
             teams_found = get_teams_for_date(selected_date)
             
         if not teams_found:
-            st.warning(f"Brak meczów w oficjalnym terminarzu na dzień {selected_date.strftime('%d.%m.%Y')}. Skorzystaj z zakładki 'Ręczny wybór drużyn', aby przetestować aplikację.")
+            st.warning(f"Brak meczów w oficjalnym terminarzu na dzień {selected_date.strftime('%d.%m.%Y')}.")
         else:
             run_scan(teams_found)
 
 with tab2:
-    st.write("Wybierz zespoły z poniższej listy, aby sprawdzić ich składy niezależnie od terminarza:")
-    selected_manual_teams = st.multiselect("Wybierz drużyny:", options=list(TEAMS_DB.keys()), default=["Indykpol AZS Olsztyn"])
+    st.write("Wybierz zespoły z poniższej listy, aby sprawdzić ich składy:")
+    selected_manual_teams = st.multiselect("Wybierz drużyny:", options=list(TEAMS_DB.keys()), default=list(TEAMS_DB.keys())[:4])
     scan_manual_btn = st.button("Skanuj zaznaczone drużyny")
 
     if scan_manual_btn:
         teams_found = {name: TEAMS_DB[name] for name in selected_manual_teams}
         run_scan(teams_found)
 
-# Wspólna funkcja wykonująca skanowanie listy drużyn
 def run_scan(teams_dict):
     st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
     
