@@ -104,44 +104,4 @@ def check_milestones(pts, aces, blk):
         next_pts = ((pts // POINT_STEP) + 1) * POINT_STEP
         needed = next_pts - pts
         if 0 < needed <= POINT_MARGIN:
-            alerts.append(f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next_pts}")
-            
-    if aces > 0:
-        next_aces = ((aces // ACE_STEP) + 1) * ACE_STEP
-        needed = next_aces - aces
-        if 0 < needed <= ACE_MARGIN:
-            alerts.append(f"💣 **ASY**: {aces} asów -> Brakuje **{needed}** do progu {next_aces}")
-            
-    if blk > 0:
-        next_blk = ((blk // BLOCK_STEP) + 1) * BLOCK_STEP
-        needed = next_blk - blk
-        if 0 < needed <= BLOCK_MARGIN:
-            alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
-    return alerts
-
-def run_scan(teams_dict):
-    st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
-    
-    total_alerts_found = 0
-    overall_progress = st.progress(0)
-    status_box = st.empty()
-    
-    teams_list = list(teams_dict.items())
-    teams_count = len(teams_list)
-    
-    for t_idx, (team_name, team_url) in enumerate(teams_list):
-        status_box.text(f"Analizuję skład ({t_idx+1}/{teams_count}): {team_name}...")
-        
-        try:
-            res = requests.get(team_url, headers=get_headers(), timeout=5)
-            if res.status_code != 200:
-                continue
-            
-            soup = BeautifulSoup(res.text, 'html.parser')
-            player_links = []
-            seen_urls = set()
-            
-            for a in soup.find_all('a', href=True):
-                href = a['href']
-                if "/players/id/" in href and "/tour/" in href:
-                    full
+            alerts.append(f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next
