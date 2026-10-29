@@ -81,7 +81,7 @@ if st.button("🚀 Uruchom szybki skan drużyny"):
         
         for a in soup.find_all('a', href=True):
             href = a['href']
-            if "/players/id/" in href and "/tour/" in href: # Dokładniejsze dopasowanie profilu
+            if "/players/id/" in href and "/tour/" in href:
                 full_url = href if href.startswith("http") else f"https://www.tauronliga.pl{href}"
                 name = a.get_text(strip=True)
                 if name and full_url not in seen_urls:
@@ -95,7 +95,7 @@ if st.button("🚀 Uruchom szybki skan drużyny"):
                 {"name": "Jakub Majchrzak", "url": "https://www.tauronliga.pl/players/id/816/tour/53.html"}
             ]
 
-        st.write(Znaleziono **{len(player_links)}** zawodników do sprawdzenia. Skanuję po kolei:)
+        st.write(f"Znaleziono **{len(player_links)}** zawodników do sprawdzenia. Skanuję po kolei:")
         
         progress_bar = st.progress(0)
         status_text = st.empty()
