@@ -78,5 +78,4 @@ def get_player_career_stats(player_url):
         soup = BeautifulSoup(res.text, 'html.parser')
         pts, aces, blk = 0, 0, 0
 
-        for row in soup.find_all(['tr', 'li', 'div']):
-            text = " ".join(row.get_text
+        for row in soup.find
