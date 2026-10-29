@@ -24,10 +24,8 @@ def get_player_career_stats(player_url):
         soup = BeautifulSoup(res.text, 'html.parser')
         text_content = soup.get_text()
 
-        # Szukanie konkretnych fraz w kodzie strony
         pts, aces, blk = 0, 0, 0
 
-        # Reguła wyciągania cyfr po etykietach ze strony
         pts_match = re.search(r'Liczba pkt zdobytych w\s*ligie\s*(\d+)', text_content)
         aces_match = re.search(r'Liczba asów\s*(\d+)', text_content)
         blk_match = re.search(r'Liczba pkt z bloków\s*(\d+)', text_content)
@@ -40,7 +38,7 @@ def get_player_career_stats(player_url):
     except Exception as e:
         return None
 
-def check_milestones(name, stats):
+def check_milestones(stats):
     pts, aces, blk = stats["pts"], stats["aces"], stats["blk"]
     alerts = []
     
@@ -68,24 +66,36 @@ def check_milestones(name, stats):
     return alerts
 
 # Przycisk uruchamiający analizę
-if st.button("🔍 Skanuj dzisiejsze mecze i sprawdzaj rekordy"):
-    with st.spinner("Pobieranie dokładnych danych z profilów zawodników..."):
-        # Przykładowe podstrony zawodników z Twojej instrukcji
+if st.button("🔍 Skanuj dzisiejsze mecze i sprawdź rekordy"):
+    with st.spinner("Pobieranie danych z profilów zawodników..."):
+        
+        # Baza testowa powiększona o kluczowych graczy dzisiejszych spotkań (Olsztyn, ZAKSA, Resovia, Gdańsk)
+        # Możesz tutaj wklejać kolejne adresy zgodnie ze swoimi 10 krokami
         players_to_check = [
-            {"name": "Jakub Majchrzak", "team": "Indykpol AZS Olsztyn", "url": "https://www.tauronliga.pl/players/id/816/tour/53.html"},
-            {"name": "Moritz Karlitzek", "team": "Indykpol AZS Olsztyn", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
+            # Olsztyn / ZAKSA / Resovia / Gdańsk przykładowe profile
+            {"name": "Jan Hadrava", "team": "Energa Indykpol AZS Olsztyn", "url": "https://www.tauronliga.pl/players/id/650/tour/53.html"},
+            {"name": "Moritz Karlitzek", "team": "Energa Indykpol AZS Olsztyn", "url": "https://www.tauronliga.pl/players/id/1784/tour/53.html"},
+            {"name": "Karol Butryn", "team": "Asseco Resovia Rzeszów", "url": "https://www.tauronliga.pl/players/id/1020/tour/53.html"},
+            {"name": "Piotr Nowakowski", "team": "Energa Trefl Gdańsk", "url": "https://www.tauronliga.pl/players/id/111/tour/53.html"},
+            {"name": "Damian Schulz", "team": "Energa Trefl Gdańsk", "url": "https://www.tauronliga.pl/players/id/450/tour/53.html"}
         ]
         
         found_any = False
-        for p in players_to_check:
+        progress_bar = st.progress(0)
+        total = len(players_to_check)
+        
+        for i, p in enumerate(players_to_check):
             stats = get_player_career_stats(p["url"])
             if stats:
-                alerts = check_milestones(p["name"], stats)
+                alerts = check_milestones(stats)
                 if alerts:
                     found_any = True
-                    st.subheader(f"👤 {p['name']} ({p['team']})")
+                    st.success(f"🚨 **{p['name']}** ({p['team']})")
                     for a in alerts:
-                        st.markdown(f"- {a}")
-        
+                        st.markdown(f"    • {a}")
+            progress_bar.progress((i + 1) / total)
+            
         if not found_any:
-            st.info("Brak zawodników spełniających kryteria w wyznaczonym marginesie dla przeskanowanych profili.")
+            st.warning("Przeskanowano wybrane profile, ale żaden z graczy nie znajduje się obecnie w strefie marginesu kamienia milowego.")
+        else:
+            st.balloons()
