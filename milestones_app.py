@@ -86,3 +86,41 @@ def get_player_career_stats(player_url):
                 if numbers: 
                     pts = int(numbers[-1])
             if "Liczba asów" in text:
+                numbers = re.findall(r'\d+', text)
+                if numbers: 
+                    aces = int(numbers[-1])
+            if "Liczba pkt z bloków" in text:
+                numbers = re.findall(r'\d+', text)
+                if numbers: 
+                    blk = int(numbers[-1])
+
+        return {"pts": pts, "aces": aces, "blk": blk}
+    except Exception:
+        return None
+
+def check_milestones(pts, aces, blk):
+    alerts = []
+    if pts > 0:
+        next_pts = ((pts // POINT_STEP) + 1) * POINT_STEP
+        needed = next_pts - pts
+        if 0 < needed <= POINT_MARGIN:
+            alerts.append(f"🎯 **PUNKTY**: {pts} pkt -> Brakuje **{needed}** do progu {next_pts}")
+            
+    if aces > 0:
+        next_aces = ((aces // ACE_STEP) + 1) * ACE_STEP
+        needed = next_aces - aces
+        if 0 < needed <= ACE_MARGIN:
+            alerts.append(f"💣 **ASY**: {aces} asów -> Brakuje **{needed}** do progu {next_aces}")
+            
+    if blk > 0:
+        next_blk = ((blk // BLOCK_STEP) + 1) * BLOCK_STEP
+        needed = next_blk - blk
+        if 0 < needed <= BLOCK_MARGIN:
+            alerts.append(f"🧱 **BLOKI**: {blk} bloków -> Brakuje **{needed}** do progu {next_blk}")
+    return alerts
+
+def run_scan(teams_dict):
+    st.success(f"Analizuję drużyny: {', '.join(teams_dict.keys())}")
+    
+    total_alerts_found = 0
+    overall_progress = st.progress(0)
